@@ -1,0 +1,16 @@
+{
+  "name": "lunagram",
+  "version": "1.0.0",
+  "description": "A smooth macOS Electron .app wrapper for Instagram.com, named LunaGram.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+  "pack": "electron-packager . LunaGram --platform=darwin --arch=x64 --icon=icon.icns --overwrite"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-packager": "^17.1.1"
+  }
+}

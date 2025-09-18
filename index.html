@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>LunaGram</title>
+    <style>
+      html, body, #igview {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      #igview {
+        border: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="splash" style="position:absolute;top:0;left:0;width:100vw;height:100vh;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10000;">
+      <img src="icon.png" alt="LunaGram" style="width:96px;height:96px;margin-bottom:24px;" />
+      <div style="font-size:1.5em;font-weight:bold;margin-bottom:16px;">Loading Instagram…</div>
+      <div id="progress-bar-container" style="width:200px;height:8px;background:#eee;border-radius:4px;overflow:hidden;">
+        <div id="progress-bar" style="width:0;height:100%;background:#0095f6;transition:width 0.2s;"></div>
+      </div>
+    </div>
+    <webview id="igview"
+      src="https://www.instagram.com"
+      style="width:100%;height:100%;display:none;"
+      useragent="Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+      preload="./preload.js"
+      allowpopups
+      webpreferences="contextIsolation, nativeWindowOpen, javascript=yes"
+    ></webview>
+    <script>
+      const webview = document.getElementById('igview');
+      const splash = document.getElementById('splash');
+      const progressBar = document.getElementById('progress-bar');
+      let progress = 0;
+      // Simulate progress bar
+      const fakeProgress = setInterval(() => {
+        if (progress < 90) {
+          progress += Math.random() * 10;
+          if (progress > 90) progress = 90;
+          progressBar.style.width = progress + '%';
+        }
+      }, 150);
+      webview.addEventListener('did-start-loading', () => {
+        progress = 10;
+        progressBar.style.width = progress + '%';
+      });
+      webview.addEventListener('did-stop-loading', () => {
+        clearInterval(fakeProgress);
+        progressBar.style.width = '100%';
+        setTimeout(() => {
+          splash.style.display = 'none';
+          webview.style.display = 'block';
+        }, 300);
+      });
+      // Handle webview load failure
+      webview.addEventListener('did-fail-load', (e) => {
+        clearInterval(fakeProgress);
+        progressBar.style.width = '100%';
+        splash.innerHTML = '<div style="color:#d00;font-weight:bold;margin-bottom:12px;">Failed to load Instagram.</div>' +
+          '<button onclick="location.reload()" style="padding:8px 16px;background:#0095f6;color:#fff;border:none;border-radius:4px;font-size:1em;">Retry</button>';
+      });
+      // Try to reload webview if blank after 10s
+      setTimeout(() => {
+        if (webview.style.display === 'none') {
+          webview.reload();
+        }
+      }, 10000);
+      // Fallback: hide splash after 10 seconds no matter what
+      setTimeout(() => {
+        splash.style.display = 'none';
+        webview.style.display = 'block';
+      }, 10000);
+    </script>
+  </body>
+</html>
