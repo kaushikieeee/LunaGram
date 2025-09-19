@@ -68,7 +68,7 @@ jobs:
         sudo diskutil list | grep "LunaGram" | awk '{print $1}' | xargs -I {} sudo diskutil unmount {} 2>/dev/null || true
         hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
         
-    - name: Build app
+    - name: Build app (ZIP only - more reliable)
       run: npm run build
       env:
         CSC_IDENTITY_AUTO_DISCOVERY: false
@@ -78,6 +78,46 @@ jobs:
       run: |
         echo "Contents of dist directory:"
         ls -la dist/ || echo "No dist directory found"
+        find dist/ -name "*.app" -type d || echo "No .app files found"
+        
+    - name: Create DMGs manually (fallback method)
+      run: |
+        echo "Creating DMGs manually to avoid hdiutil issues..."
+        
+        # Find the built .app files
+        for app_path in dist/mac*/*.app; do
+          if [ -d "$app_path" ]; then
+            app_name=$(basename "$app_path" .app)
+            app_dir=$(dirname "$app_path")
+            
+            # Determine architecture from path
+            if [[ "$app_dir" == *"arm64"* ]]; then
+              arch_suffix="-arm64"
+            else
+              arch_suffix=""
+            fi
+            
+            dmg_name="LunaGram-1.0.0${arch_suffix}.dmg"
+            
+            echo "Creating $dmg_name from $app_path"
+            
+            # Simple DMG creation without complex options
+            hdiutil create -volname "LunaGram" -srcfolder "$app_path" -ov -format UDZO "dist/$dmg_name" || {
+              echo "DMG creation failed for $app_path, trying alternative method..."
+              # Fallback: create a simple folder-based DMG
+              temp_dir=$(mktemp -d)
+              cp -R "$app_path" "$temp_dir/"
+              ln -s /Applications "$temp_dir/Applications"
+              hdiutil create -volname "LunaGram" -srcfolder "$temp_dir" -ov -format UDZO "dist/$dmg_name" || echo "Alternative DMG creation also failed for $app_path"
+              rm -rf "$temp_dir"
+            }
+          fi
+        done
+        
+    - name: List final files
+      run: |
+        echo "Final dist contents:"
+        ls -la dist/
         
     - name: Clean up after build (CI fix)
       if: always() && github.event.inputs.skip_cleanup != 'true'
@@ -138,3 +178,5 @@ jobs:
         files: |
           dist/LunaGram-1.0.0*.dmg
           dist/LunaGram-1.0.0*.zip
+          dist/*.dmg
+          dist/*.zip
