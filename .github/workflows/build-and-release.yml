@@ -65,45 +65,25 @@ jobs:
     - name: Clean any mounted DMGs (CI fix)
       run: |
         echo "Cleaning up any mounted disk images..."
+        sudo diskutil list | grep "LunaGram" | awk '{print $1}' | xargs -I {} sudo diskutil unmount {} 2>/dev/null || true
         hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
         
-    - name: Set build targets
-      id: targets
-      run: |
-        case "${{ github.event.inputs.build_targets }}" in
-          "dmg-only")
-            echo "targets=dmg" >> $GITHUB_OUTPUT
-            ;;
-          "zip-only")
-            echo "targets=zip" >> $GITHUB_OUTPUT
-            ;;
-          "intel-only")
-            echo "targets=dmg:x64,zip:x64" >> $GITHUB_OUTPUT
-            ;;
-          "arm64-only")
-            echo "targets=dmg:arm64,zip:arm64" >> $GITHUB_OUTPUT
-            ;;
-          *)
-            echo "targets=dmg:x64,dmg:arm64,zip:x64,zip:arm64" >> $GITHUB_OUTPUT
-            ;;
-        esac
-        
     - name: Build app
-      run: |
-        if [ "${{ github.event.inputs.build_targets }}" = "all" ]; then
-          echo "Building all targets..."
-          npm run build
-        else
-          echo "Building selected targets: ${{ steps.targets.outputs.targets }}"
-          npx electron-builder --publish=never --${{ steps.targets.outputs.targets }}
-        fi
+      run: npm run build
       env:
         CSC_IDENTITY_AUTO_DISCOVERY: false
+        ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: true
+        
+    - name: List built files (debug)
+      run: |
+        echo "Contents of dist directory:"
+        ls -la dist/ || echo "No dist directory found"
         
     - name: Clean up after build (CI fix)
       if: always() && github.event.inputs.skip_cleanup != 'true'
       run: |
         echo "Final cleanup of any remaining mounted images..."
+        sudo diskutil list | grep "LunaGram" | awk '{print $1}' | xargs -I {} sudo diskutil unmount {} 2>/dev/null || true
         hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
         
     - name: Upload Build Artifacts

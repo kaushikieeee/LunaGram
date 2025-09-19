@@ -33,19 +33,11 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64"]
-        },
-        {
-          "target": "dmg", 
-          "arch": ["arm64"]
+          "arch": ["x64", "arm64"]
         },
         {
           "target": "zip",
-          "arch": ["x64"]
-        },
-        {
-          "target": "zip",
-          "arch": ["arm64"]
+          "arch": ["x64", "arm64"]
         }
       ],
       "entitlements": "entitlements.plist",
@@ -72,6 +64,7 @@
       "title": "LunaGram",
       "icon": "icon.icns",
       "format": "UDZO",
+      "artifactName": "${productName}-${version}.${ext}",
       "window": {
         "width": 600,
         "height": 400
