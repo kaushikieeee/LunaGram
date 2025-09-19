@@ -7,40 +7,6 @@ on:
         description: 'Release version (e.g., v1.0.0)'
         required: true
         default: 'v1.0.0'
-      prerelease:
-        description: 'Mark as pre-release'
-        required: false
-        default: false
-        type: boolean
-      draft:
-        description: 'Create as draft release'
-        required: false
-        default: false
-        type: boolean
-      release_title:
-        description: 'Custom release title (optional)'
-        required: false
-        default: ''
-      release_notes:
-        description: 'Additional release notes (optional)'
-        required: false
-        default: ''
-      build_targets:
-        description: 'Build targets'
-        required: false
-        default: 'all'
-        type: choice
-        options:
-        - 'all'
-        - 'dmg-only'
-        - 'zip-only'
-        - 'intel-only'
-        - 'arm64-only'
-      skip_cleanup:
-        description: 'Skip post-build cleanup (for debugging)'
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -62,132 +28,24 @@ jobs:
     - name: Install dependencies
       run: npm ci
       
-    - name: Clean any mounted DMGs (CI fix)
-      run: |
-        echo "Cleaning up any mounted disk images..."
-        sudo diskutil list | grep "LunaGram" | awk '{print $1}' | xargs -I {} sudo diskutil unmount {} 2>/dev/null || true
-        hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
-        
-    - name: Build app (ZIP only - more reliable)
+    - name: Build app
       run: npm run build
       env:
         CSC_IDENTITY_AUTO_DISCOVERY: false
-        ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: true
-        
-    - name: List built files (debug)
-      run: |
-        echo "Contents of dist directory:"
-        ls -la dist/ || echo "No dist directory found"
-        find dist/ -name "*.app" -type d || echo "No .app files found"
-        
-    - name: Wait and cleanup before DMG creation
-      run: |
-        echo "Waiting for build processes to fully complete..."
-        sleep 10
-        
-        echo "Checking for any processes using dist files..."
-        lsof +D dist/ 2>/dev/null || echo "No open files in dist/"
-        
-        echo "Force cleanup of any mounted volumes..."
-        hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
-        
-        echo "Ensure all dist files are readable..."
-        chmod -R 755 dist/ || true
-        
-    - name: Create DMGs manually (fallback method)
-      run: |
-        echo "Creating DMGs manually to avoid hdiutil issues..."
-        
-        # Wait a moment for any file operations to complete
-        sleep 5
-        
-        # Force unmount any mounted volumes
-        hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
-        
-        # Find the built .app files
-        for app_path in dist/mac*/*.app; do
-          if [ -d "$app_path" ]; then
-            app_name=$(basename "$app_path" .app)
-            app_dir=$(dirname "$app_path")
-            
-            # Determine architecture from path
-            if [[ "$app_dir" == *"arm64"* ]]; then
-              arch_suffix="-arm64"
-            else
-              arch_suffix=""
-            fi
-            
-            dmg_name="LunaGram-1.0.0${arch_suffix}.dmg"
-            
-            echo "Creating $dmg_name from $app_path"
-            
-            # Copy app to a clean temporary location to avoid "resource busy"
-            temp_app_dir=$(mktemp -d)
-            cp -R "$app_path" "$temp_app_dir/"
-            temp_app_path="$temp_app_dir/$(basename "$app_path")"
-            
-            # Simple DMG creation from copied app
-            if hdiutil create -volname "LunaGram" -srcfolder "$temp_app_path" -ov -format UDZO "dist/$dmg_name"; then
-              echo "Successfully created $dmg_name"
-            else
-              echo "DMG creation failed for $app_path, trying installer-style DMG..."
-              # Create installer-style DMG with Applications link
-              installer_dir=$(mktemp -d)
-              cp -R "$temp_app_path" "$installer_dir/"
-              ln -s /Applications "$installer_dir/Applications"
-              
-              if hdiutil create -volname "LunaGram" -srcfolder "$installer_dir" -ov -format UDZO "dist/$dmg_name"; then
-                echo "Successfully created installer-style $dmg_name"
-              else
-                echo "All DMG creation methods failed for $app_path"
-              fi
-              rm -rf "$installer_dir"
-            fi
-            
-            # Clean up temp directory
-            rm -rf "$temp_app_dir"
-          fi
-        done
-        
-    - name: List final files
-      run: |
-        echo "Final dist contents:"
-        ls -la dist/
-        
-    - name: Clean up after build (CI fix)
-      if: always() && github.event.inputs.skip_cleanup != 'true'
-      run: |
-        echo "Final cleanup of any remaining mounted images..."
-        sudo diskutil list | grep "LunaGram" | awk '{print $1}' | xargs -I {} sudo diskutil unmount {} 2>/dev/null || true
-        hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
-        
-    - name: Upload Build Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: LunaGram-${{ github.event.inputs.version }}-builds
-        path: |
-          dist/*.dmg
-          dist/*.zip
-        retention-days: 30
         
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.inputs.version }}
-        name: ${{ github.event.inputs.release_title || format('LunaGram {0}', github.event.inputs.version) }}
+        name: LunaGram ${{ github.event.inputs.version }}
         body: |
-          ## 🚀 ${{ github.event.inputs.release_title || format('LunaGram {0}', github.event.inputs.version) }}
-          
-          ${{ github.event.inputs.release_notes }}
+          ## 🚀 LunaGram ${{ github.event.inputs.version }}
           
           ### 📥 Installation
           
-          **Recommended**: Download the `.dmg` file below for the fastest installation experience.
-          
-          ### 📦 Downloads
+          **Download the `.dmg` file for your Mac:**
           - **Intel Macs**: `LunaGram-${{ github.event.inputs.version }}.dmg`
           - **Apple Silicon Macs**: `LunaGram-${{ github.event.inputs.version }}-arm64.dmg`
-          - **Universal ZIP**: `LunaGram-${{ github.event.inputs.version }}-mac.zip`
           
           ### 🔧 Installation Instructions
           1. Download the appropriate `.dmg` file for your Mac
@@ -197,7 +55,7 @@ jobs:
           
           **First launch**: Right-click → Open (for security approval)
           
-          💡 **"Disk is damaged" error?** Run: `xattr -c ~/Downloads/LunaGram-*.dmg` - See [troubleshooting guide](https://github.com/${{ github.repository }}/blob/master/DMG_FIX.md) for details.
+          💡 **"Disk is damaged" error?** Run: `xattr -c ~/Downloads/LunaGram-*.dmg`
           
           ### ✨ Features
           - Native Instagram experience for macOS
@@ -205,13 +63,7 @@ jobs:
           - Universal binary (Intel + Apple Silicon)
           - Persistent login
           - Deep link support
-          
-          ---
-          **Build Info**: ${{ github.event.inputs.build_targets }} targets | Built on: ${{ github.run_number }}
-        draft: ${{ github.event.inputs.draft }}
-        prerelease: ${{ github.event.inputs.prerelease }}
+        draft: false
+        prerelease: false
         files: |
-          dist/LunaGram-1.0.0*.dmg
-          dist/LunaGram-1.0.0*.zip
           dist/*.dmg
-          dist/*.zip
