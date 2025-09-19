@@ -38,6 +38,44 @@ jobs:
       env:
         CSC_IDENTITY_AUTO_DISCOVERY: false
         
+    - name: Create DMGs and ZIPs
+      run: |
+        echo "Creating DMGs and ZIPs with version ${{ github.event.inputs.version }}"
+        
+        # Create DMGs and ZIPs for each architecture
+        for mac_dir in dist/mac*; do
+          if [ -d "$mac_dir" ]; then
+            app_path="$mac_dir/LunaGram.app"
+            
+            if [ -d "$app_path" ]; then
+              # Determine architecture suffix
+              if [[ "$mac_dir" == *"arm64"* ]]; then
+                arch_suffix="-arm64"
+              else
+                arch_suffix=""
+              fi
+              
+              # Create ZIP
+              zip_name="LunaGram-${{ github.event.inputs.version }}${arch_suffix}-mac.zip"
+              (cd "$mac_dir" && zip -r "../$zip_name" "LunaGram.app")
+              
+              # Create DMG
+              dmg_name="LunaGram-${{ github.event.inputs.version }}${arch_suffix}.dmg"
+              temp_dir=$(mktemp -d)
+              cp -R "$app_path" "$temp_dir/"
+              ln -s /Applications "$temp_dir/Applications"
+              
+              hdiutil create -volname "LunaGram" -srcfolder "$temp_dir" -ov -format UDZO "dist/$dmg_name" 2>/dev/null || \
+              hdiutil create -volname "LunaGram" -srcfolder "$app_path" -ov -format UDZO "dist/$dmg_name" 2>/dev/null || \
+              echo "DMG creation failed for $dmg_name"
+              
+              rm -rf "$temp_dir"
+            fi
+          fi
+        done
+        
+        ls -la dist/*.dmg dist/*.zip 2>/dev/null || echo "Files created"
+        
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -81,7 +119,7 @@ jobs:
         draft: false
         prerelease: ${{ github.event.inputs.prerelease }}
         files: |
-          dist/LunaGram-1.0.0.dmg
-          dist/LunaGram-1.0.0-arm64.dmg
-          dist/LunaGram-1.0.0-mac.zip
-          dist/LunaGram-1.0.0-arm64-mac.zip
+          dist/LunaGram-${{ github.event.inputs.version }}.dmg
+          dist/LunaGram-${{ github.event.inputs.version }}-arm64.dmg
+          dist/LunaGram-${{ github.event.inputs.version }}-mac.zip
+          dist/LunaGram-${{ github.event.inputs.version }}-arm64-mac.zip
