@@ -12,11 +12,6 @@ on:
         required: false
         default: false
         type: boolean
-      create_release:
-        description: 'Create GitHub release (requires GH_TOKEN)'
-        required: false
-        default: true
-        type: boolean
 
 jobs:
   build-and-release:
@@ -50,7 +45,6 @@ jobs:
         retention-days: 30
         
     - name: Create Release
-      if: ${{ github.event.inputs.create_release == 'true' }}
       id: create_release
       uses: actions/create-release@v1
       env:
@@ -88,7 +82,6 @@ jobs:
         prerelease: ${{ github.event.inputs.prerelease }}
         
     - name: Upload Intel DMG
-      if: ${{ github.event.inputs.create_release == 'true' }}
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -99,7 +92,6 @@ jobs:
         asset_content_type: application/octet-stream
         
     - name: Upload Apple Silicon DMG
-      if: ${{ github.event.inputs.create_release == 'true' }}
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,7 +102,6 @@ jobs:
         asset_content_type: application/octet-stream
         
     - name: Upload Intel ZIP
-      if: ${{ github.event.inputs.create_release == 'true' }}
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -121,7 +112,6 @@ jobs:
         asset_content_type: application/zip
         
     - name: Upload Apple Silicon ZIP
-      if: ${{ github.event.inputs.create_release == 'true' }}
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
