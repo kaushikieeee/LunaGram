@@ -40,12 +40,12 @@ jobs:
         
     - name: Create DMGs and ZIPs
       run: |
-        echo "Creating DMGs and ZIPs from built apps..."
+        echo "Creating DMGs, ZIPs, and standalone .app files from built apps..."
         
         # Force cleanup any mounted volumes first
         hdiutil info 2>/dev/null | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
         
-        # Create DMGs and ZIPs for each architecture
+        # Create DMGs, ZIPs, and .app files for each architecture
         for mac_dir in dist/mac*; do
           if [ -d "$mac_dir" ]; then
             echo "Processing directory: $mac_dir"
@@ -61,6 +61,14 @@ jobs:
                 arch_suffix=""
               fi
               
+              # Create standalone .app file (just copy and rename)
+              app_name="LunaGram-1.0.0${arch_suffix}.app"
+              echo "Creating standalone $app_name..."
+              cp -R "$app_path" "dist/$app_name"
+              if [ -d "dist/$app_name" ]; then
+                echo "✅ Created standalone $app_name"
+              fi
+              
               # Create DMG
               dmg_name="LunaGram-1.0.0${arch_suffix}.dmg"
               echo "Creating $dmg_name..."
@@ -69,8 +77,11 @@ jobs:
               cp -R "$app_path" "$temp_dir/"
               ln -s /Applications "$temp_dir/Applications"
               
-              if hdiutil create -volname "LunaGram" -srcfolder "$temp_dir" -ov -format UDZO "dist/$dmg_name" 2>/dev/null; then
+              # Try multiple DMG creation methods
+              if hdiutil create -volname "LunaGram" -srcfolder "$temp_dir" -ov -format UDZO "dist/$dmg_name"; then
                 echo "✅ Created $dmg_name"
+              elif hdiutil create -volname "LunaGram" -srcfolder "$app_path" -ov -format UDZO "dist/$dmg_name"; then
+                echo "✅ Created $dmg_name (app-only)"
               else
                 echo "❌ Failed to create $dmg_name"
               fi
@@ -87,12 +98,21 @@ jobs:
               else
                 echo "❌ Failed to create $zip_name"
               fi
+            else
+              echo "❌ No app found at: $app_path"
             fi
+          else
+            echo "❌ Directory not found: $mac_dir"
           fi
         done
         
         echo "Final files created:"
-        ls -la dist/*.dmg dist/*.zip 2>/dev/null || echo "No files created"
+        echo "DMG files:"
+        ls -la dist/*.dmg 2>/dev/null || echo "No DMG files created"
+        echo "ZIP files:"
+        ls -la dist/*.zip 2>/dev/null || echo "No ZIP files created"
+        echo "APP files:"
+        ls -la dist/*.app 2>/dev/null || echo "No APP files created"
         
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
@@ -101,6 +121,7 @@ jobs:
         path: |
           dist/*.dmg
           dist/*.zip
+          dist/*.app
         retention-days: 30
         
     - name: Create Release
@@ -119,6 +140,7 @@ jobs:
           - **Intel Macs**: `LunaGram-${{ github.event.inputs.version }}.dmg`
           - **Apple Silicon Macs**: `LunaGram-${{ github.event.inputs.version }}-arm64.dmg`
           - **Universal ZIP**: `LunaGram-${{ github.event.inputs.version }}-mac.zip`
+          - **Standalone Apps**: `LunaGram-${{ github.event.inputs.version }}.app` / `LunaGram-${{ github.event.inputs.version }}-arm64.app`
           
           ### 🔧 Installation Instructions
           1. Download the appropriate `.dmg` file for your Mac
@@ -141,3 +163,5 @@ jobs:
           dist/LunaGram-1.0.0-arm64.dmg
           dist/LunaGram-1.0.0-mac.zip
           dist/LunaGram-1.0.0-arm64-mac.zip
+          dist/LunaGram-1.0.0.app
+          dist/LunaGram-1.0.0-arm64.app
