@@ -18,6 +18,14 @@ LunaGram is a beautiful, battery-friendly, native-feeling macOS `.app` for Insta
 
 **The `.dmg` installer provides the fastest and smoothest installation experience!**
 
+### 🔧 Troubleshooting
+
+**"Disk is damaged" error?** This is a macOS security feature for unsigned apps. Quick fix:
+```bash
+xattr -c ~/Downloads/LunaGram-*.dmg
+```
+See [DMG_FIX.md](DMG_FIX.md) for detailed instructions.
+
 ## ✨ Features
 
 - Native-feeling Instagram experience in a standalone window
