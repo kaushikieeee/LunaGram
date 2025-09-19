@@ -12,6 +12,35 @@ on:
         required: false
         default: false
         type: boolean
+      draft:
+        description: 'Create as draft release'
+        required: false
+        default: false
+        type: boolean
+      release_title:
+        description: 'Custom release title (optional)'
+        required: false
+        default: ''
+      release_notes:
+        description: 'Additional release notes (optional)'
+        required: false
+        default: ''
+      build_targets:
+        description: 'Build targets'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+        - 'all'
+        - 'dmg-only'
+        - 'zip-only'
+        - 'intel-only'
+        - 'arm64-only'
+      skip_cleanup:
+        description: 'Skip post-build cleanup (for debugging)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -33,10 +62,49 @@ jobs:
     - name: Install dependencies
       run: npm ci
       
+    - name: Clean any mounted DMGs (CI fix)
+      run: |
+        echo "Cleaning up any mounted disk images..."
+        hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
+        
+    - name: Set build targets
+      id: targets
+      run: |
+        case "${{ github.event.inputs.build_targets }}" in
+          "dmg-only")
+            echo "targets=dmg" >> $GITHUB_OUTPUT
+            ;;
+          "zip-only")
+            echo "targets=zip" >> $GITHUB_OUTPUT
+            ;;
+          "intel-only")
+            echo "targets=dmg:x64,zip:x64" >> $GITHUB_OUTPUT
+            ;;
+          "arm64-only")
+            echo "targets=dmg:arm64,zip:arm64" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "targets=dmg:x64,dmg:arm64,zip:x64,zip:arm64" >> $GITHUB_OUTPUT
+            ;;
+        esac
+        
     - name: Build app
-      run: npm run build
+      run: |
+        if [ "${{ github.event.inputs.build_targets }}" = "all" ]; then
+          echo "Building all targets..."
+          npm run build
+        else
+          echo "Building selected targets: ${{ steps.targets.outputs.targets }}"
+          npx electron-builder --publish=never --${{ steps.targets.outputs.targets }}
+        fi
       env:
         CSC_IDENTITY_AUTO_DISCOVERY: false
+        
+    - name: Clean up after build (CI fix)
+      if: always() && github.event.inputs.skip_cleanup != 'true'
+      run: |
+        echo "Final cleanup of any remaining mounted images..."
+        hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
         
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
@@ -51,9 +119,11 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ github.event.inputs.version }}
-        name: LunaGram ${{ github.event.inputs.version }}
+        name: ${{ github.event.inputs.release_title || format('LunaGram {0}', github.event.inputs.version) }}
         body: |
-          ## 🚀 LunaGram ${{ github.event.inputs.version }}
+          ## 🚀 ${{ github.event.inputs.release_title || format('LunaGram {0}', github.event.inputs.version) }}
+          
+          ${{ github.event.inputs.release_notes }}
           
           ### 📥 Installation
           
@@ -72,16 +142,19 @@ jobs:
           
           **First launch**: Right-click → Open (for security approval)
           
+          💡 **"Disk is damaged" error?** Run: `xattr -c ~/Downloads/LunaGram-*.dmg` - See [troubleshooting guide](https://github.com/${{ github.repository }}/blob/master/DMG_FIX.md) for details.
+          
           ### ✨ Features
           - Native Instagram experience for macOS
           - Fast startup with automatic optimizations
           - Universal binary (Intel + Apple Silicon)
           - Persistent login
           - Deep link support
-        draft: false
+          
+          ---
+          **Build Info**: ${{ github.event.inputs.build_targets }} targets | Built on: ${{ github.run_number }}
+        draft: ${{ github.event.inputs.draft }}
         prerelease: ${{ github.event.inputs.prerelease }}
         files: |
-          dist/LunaGram-1.0.0.dmg
-          dist/LunaGram-1.0.0-arm64.dmg
-          dist/LunaGram-1.0.0-mac.zip
-          dist/LunaGram-1.0.0-arm64-mac.zip
+          dist/LunaGram-1.0.0*.dmg
+          dist/LunaGram-1.0.0*.zip
