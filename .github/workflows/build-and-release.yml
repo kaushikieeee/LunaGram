@@ -42,8 +42,11 @@ jobs:
       run: |
         echo "Creating DMGs, ZIPs, and standalone .app files from built apps..."
         
-        # Force cleanup any mounted volumes first
-        hdiutil info 2>/dev/null | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
+        # More aggressive cleanup of any mounted volumes
+        echo "Cleaning up any existing mounts..."
+        sudo diskutil list | grep "LunaGram" | awk '{print $6}' | xargs -I {} sudo diskutil unmount {} 2>/dev/null || true
+        hdiutil info 2>/dev/null | grep "/dev/disk" | awk '{print $1}' | xargs -I {} sudo hdiutil detach {} -force 2>/dev/null || true
+        sleep 2
         
         # Create DMGs, ZIPs, and .app files for each architecture
         for mac_dir in dist/mac*; do
@@ -69,26 +72,7 @@ jobs:
                 echo "✅ Created standalone $app_name"
               fi
               
-              # Create DMG
-              dmg_name="LunaGram-1.0.0${arch_suffix}.dmg"
-              echo "Creating $dmg_name..."
-              
-              temp_dir=$(mktemp -d)
-              cp -R "$app_path" "$temp_dir/"
-              ln -s /Applications "$temp_dir/Applications"
-              
-              # Try multiple DMG creation methods
-              if hdiutil create -volname "LunaGram" -srcfolder "$temp_dir" -ov -format UDZO "dist/$dmg_name"; then
-                echo "✅ Created $dmg_name"
-              elif hdiutil create -volname "LunaGram" -srcfolder "$app_path" -ov -format UDZO "dist/$dmg_name"; then
-                echo "✅ Created $dmg_name (app-only)"
-              else
-                echo "❌ Failed to create $dmg_name"
-              fi
-              
-              rm -rf "$temp_dir"
-              
-              # Create ZIP
+              # Create ZIP first (more reliable)
               zip_name="LunaGram-1.0.0${arch_suffix}-mac.zip"
               echo "Creating $zip_name..."
               (cd "$mac_dir" && zip -r "../$zip_name" "LunaGram.app")
@@ -98,6 +82,61 @@ jobs:
               else
                 echo "❌ Failed to create $zip_name"
               fi
+              
+              # Create DMG with multiple fallback methods
+              dmg_name="LunaGram-1.0.0${arch_suffix}.dmg"
+              echo "Creating $dmg_name..."
+              
+              # Method 1: Traditional approach with temp directory
+              temp_dir=$(mktemp -d)
+              cp -R "$app_path" "$temp_dir/"
+              ln -s /Applications "$temp_dir/Applications"
+              
+              # Try creating DMG with different approaches
+              dmg_created=false
+              
+              # Try method 1: Standard hdiutil
+              if hdiutil create -volname "LunaGram" -srcfolder "$temp_dir" -ov -format UDZO "dist/$dmg_name" 2>/dev/null; then
+                echo "✅ Created $dmg_name (method 1)"
+                dmg_created=true
+              else
+                echo "Method 1 failed, trying method 2..."
+                sleep 1
+                
+                # Try method 2: Just the app without Applications link
+                if hdiutil create -volname "LunaGram" -srcfolder "$app_path" -ov -format UDZO "dist/$dmg_name" 2>/dev/null; then
+                  echo "✅ Created $dmg_name (method 2 - app only)"
+                  dmg_created=true
+                else
+                  echo "Method 2 failed, trying method 3..."
+                  sleep 1
+                  
+                  # Try method 3: Use a different temp location
+                  temp_dir2="/tmp/lunagram_build_$(date +%s)"
+                  mkdir -p "$temp_dir2"
+                  cp -R "$app_path" "$temp_dir2/"
+                  
+                  if hdiutil create -volname "LunaGram" -srcfolder "$temp_dir2" -ov -format UDZO "dist/$dmg_name" 2>/dev/null; then
+                    echo "✅ Created $dmg_name (method 3 - different temp)"
+                    dmg_created=true
+                  else
+                    echo "❌ All DMG creation methods failed for $dmg_name"
+                  fi
+                  
+                  rm -rf "$temp_dir2" 2>/dev/null || true
+                fi
+              fi
+              
+              rm -rf "$temp_dir" 2>/dev/null || true
+              
+              if [ "$dmg_created" = false ]; then
+                echo "⚠️  DMG creation failed, but ZIP and .app files are available"
+              fi
+              
+              # Additional cleanup after each DMG attempt
+              sleep 1
+              sudo diskutil list | grep "LunaGram" | awk '{print $6}' | xargs -I {} sudo diskutil unmount {} 2>/dev/null || true
+              
             else
               echo "❌ No app found at: $app_path"
             fi
@@ -165,3 +204,4 @@ jobs:
           dist/LunaGram-1.0.0-arm64-mac.zip
           dist/LunaGram-1.0.0.app
           dist/LunaGram-1.0.0-arm64.app
+        fail_on_unmatched_files: false
