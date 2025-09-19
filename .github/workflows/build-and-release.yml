@@ -37,15 +37,22 @@ jobs:
       run: |
         echo "Creating DMGs from built apps..."
         
+        echo "Current dist contents:"
+        ls -la dist/ || echo "No dist directory"
+        find dist/ -name "*.app" -type d || echo "No .app files found"
+        
         # Force cleanup any mounted volumes first
         hdiutil info 2>/dev/null | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
         
         # Create DMGs for each architecture
         for mac_dir in dist/mac*; do
           if [ -d "$mac_dir" ]; then
+            echo "Processing directory: $mac_dir"
             app_path="$mac_dir/LunaGram.app"
             
             if [ -d "$app_path" ]; then
+              echo "Found app at: $app_path"
+              
               # Determine architecture suffix
               if [[ "$mac_dir" == *"arm64"* ]]; then
                 arch_suffix="-arm64"
@@ -67,16 +74,31 @@ jobs:
               else
                 echo "❌ Failed to create $dmg_name, trying alternative..."
                 # Fallback: just the app without Applications link
-                hdiutil create -volname "LunaGram" -srcfolder "$app_path" -ov -format UDZO "dist/$dmg_name" 2>/dev/null || echo "❌ All methods failed for $dmg_name"
+                if hdiutil create -volname "LunaGram" -srcfolder "$app_path" -ov -format UDZO "dist/$dmg_name" 2>/dev/null; then
+                  echo "✅ Created $dmg_name (app-only)"
+                else
+                  echo "❌ All methods failed for $dmg_name"
+                fi
               fi
               
               rm -rf "$temp_dir"
+            else
+              echo "❌ No app found at: $app_path"
             fi
+          else
+            echo "❌ Directory not found: $mac_dir"
           fi
         done
         
-        echo "Final files:"
+        echo "Final dist contents:"
+        ls -la dist/
+        echo "DMG files:"
         ls -la dist/*.dmg 2>/dev/null || echo "No DMG files created"
+        
+    - name: List all files for debugging
+      run: |
+        echo "All files in dist:"
+        find dist/ -type f -name "*" || echo "No files found"
         
     - name: Create Release
       uses: softprops/action-gh-release@v1
@@ -89,8 +111,8 @@ jobs:
           ### 📥 Installation
           
           **Download the `.dmg` file for your Mac:**
-          - **Intel Macs**: `LunaGram-${{ github.event.inputs.version }}.dmg`
-          - **Apple Silicon Macs**: `LunaGram-${{ github.event.inputs.version }}-arm64.dmg`
+          - **Intel Macs**: `LunaGram-1.0.0.dmg`
+          - **Apple Silicon Macs**: `LunaGram-1.0.0-arm64.dmg`
           
           ### 🔧 Installation Instructions
           1. Download the appropriate `.dmg` file for your Mac
@@ -112,3 +134,47 @@ jobs:
         prerelease: false
         files: |
           dist/*.dmg
+          dist/*.zip
+          
+    - name: Manual upload if files exist
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "Checking for files to upload manually..."
+        
+        # Upload DMG files if they exist
+        for dmg_file in dist/*.dmg; do
+          if [ -f "$dmg_file" ]; then
+            echo "Uploading DMG: $dmg_file"
+            gh release upload "${{ github.event.inputs.version }}" "$dmg_file" --clobber || echo "Failed to upload $dmg_file"
+          fi
+        done
+        
+        # If no DMGs, create and upload ZIP files from .app directories
+        dmg_count=$(ls dist/*.dmg 2>/dev/null | wc -l || echo 0)
+        if [ "$dmg_count" -eq 0 ]; then
+          echo "No DMG files found, creating ZIP files instead..."
+          
+          for app_dir in dist/mac*/LunaGram.app; do
+            if [ -d "$app_dir" ]; then
+              echo "Found .app directory: $app_dir"
+              parent_dir=$(dirname "$app_dir")
+              arch_suffix=""
+              if [[ "$parent_dir" == *"arm64"* ]]; then
+                arch_suffix="-arm64"
+              fi
+              
+              zip_name="LunaGram-1.0.0${arch_suffix}.zip"
+              echo "Creating zip: $zip_name"
+              (cd "$(dirname "$app_dir")" && zip -r "../$zip_name" "$(basename "$app_dir")")
+              
+              if [ -f "dist/$zip_name" ]; then
+                echo "Uploading ZIP: dist/$zip_name"
+                gh release upload "${{ github.event.inputs.version }}" "dist/$zip_name" --clobber || echo "Failed to upload $zip_name"
+              fi
+            fi
+          done
+        fi
+        
+        echo "Upload complete. Final release assets:"
+        gh release view "${{ github.event.inputs.version }}" --json assets --jq '.assets[].name' || echo "Could not list assets"
