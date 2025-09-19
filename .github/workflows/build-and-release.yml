@@ -80,9 +80,29 @@ jobs:
         ls -la dist/ || echo "No dist directory found"
         find dist/ -name "*.app" -type d || echo "No .app files found"
         
+    - name: Wait and cleanup before DMG creation
+      run: |
+        echo "Waiting for build processes to fully complete..."
+        sleep 10
+        
+        echo "Checking for any processes using dist files..."
+        lsof +D dist/ 2>/dev/null || echo "No open files in dist/"
+        
+        echo "Force cleanup of any mounted volumes..."
+        hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
+        
+        echo "Ensure all dist files are readable..."
+        chmod -R 755 dist/ || true
+        
     - name: Create DMGs manually (fallback method)
       run: |
         echo "Creating DMGs manually to avoid hdiutil issues..."
+        
+        # Wait a moment for any file operations to complete
+        sleep 5
+        
+        # Force unmount any mounted volumes
+        hdiutil info | grep "/dev/disk" | awk '{print $1}' | xargs -I {} hdiutil detach {} -force 2>/dev/null || true
         
         # Find the built .app files
         for app_path in dist/mac*/*.app; do
@@ -101,16 +121,31 @@ jobs:
             
             echo "Creating $dmg_name from $app_path"
             
-            # Simple DMG creation without complex options
-            hdiutil create -volname "LunaGram" -srcfolder "$app_path" -ov -format UDZO "dist/$dmg_name" || {
-              echo "DMG creation failed for $app_path, trying alternative method..."
-              # Fallback: create a simple folder-based DMG
-              temp_dir=$(mktemp -d)
-              cp -R "$app_path" "$temp_dir/"
-              ln -s /Applications "$temp_dir/Applications"
-              hdiutil create -volname "LunaGram" -srcfolder "$temp_dir" -ov -format UDZO "dist/$dmg_name" || echo "Alternative DMG creation also failed for $app_path"
-              rm -rf "$temp_dir"
-            }
+            # Copy app to a clean temporary location to avoid "resource busy"
+            temp_app_dir=$(mktemp -d)
+            cp -R "$app_path" "$temp_app_dir/"
+            temp_app_path="$temp_app_dir/$(basename "$app_path")"
+            
+            # Simple DMG creation from copied app
+            if hdiutil create -volname "LunaGram" -srcfolder "$temp_app_path" -ov -format UDZO "dist/$dmg_name"; then
+              echo "Successfully created $dmg_name"
+            else
+              echo "DMG creation failed for $app_path, trying installer-style DMG..."
+              # Create installer-style DMG with Applications link
+              installer_dir=$(mktemp -d)
+              cp -R "$temp_app_path" "$installer_dir/"
+              ln -s /Applications "$installer_dir/Applications"
+              
+              if hdiutil create -volname "LunaGram" -srcfolder "$installer_dir" -ov -format UDZO "dist/$dmg_name"; then
+                echo "Successfully created installer-style $dmg_name"
+              else
+                echo "All DMG creation methods failed for $app_path"
+              fi
+              rm -rf "$installer_dir"
+            fi
+            
+            # Clean up temp directory
+            rm -rf "$temp_app_dir"
           fi
         done
         
