@@ -3,14 +3,97 @@
   "version": "1.0.0",
   "description": "A smooth macOS Electron .app wrapper for Instagram.com, named LunaGram.",
   "main": "main.js",
+  "homepage": ".",
   "scripts": {
     "start": "electron .",
-  "pack": "electron-packager . LunaGram --platform=darwin --arch=x64 --icon=icon.icns --overwrite"
+    "build": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder",
+    "release": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish=never"
+  },
+  "build": {
+    "appId": "com.kaushik.lunagram",
+    "productName": "LunaGram",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "splash.html",
+      "icon.png",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "extraMetadata": {
+      "name": "LunaGram",
+      "main": "main.js"
+    },
+    "mac": {
+      "category": "public.app-category.social-networking",
+      "icon": "icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "entitlements": "entitlements.plist",
+      "entitlementsInherit": "entitlements.plist",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "notarize": false,
+      "identity": null,
+      "type": "distribution",
+      "extendInfo": {
+        "LSUIElement": false,
+        "NSRequiresAquaSystemAppearance": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLName": "LunaGram Deep Link",
+            "CFBundleURLSchemes": [
+              "lunagram"
+            ]
+          }
+        ]
+      }
+    },
+    "dmg": {
+      "title": "LunaGram",
+      "icon": "icon.icns",
+      "background": null,
+      "window": {
+        "width": 600,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 150,
+          "y": 150,
+          "type": "file"
+        },
+        {
+          "x": 450,
+          "y": 150,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "afterSign": "scripts/notarize.js"
   },
   "author": "",
   "license": "MIT",
   "devDependencies": {
     "electron": "^30.0.0",
-    "electron-packager": "^17.1.1"
+    "electron-builder": "^26.0.12"
   }
 }

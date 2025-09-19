@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LunaGram</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(40deg, rgb(108, 0, 162), rgb(0, 17, 82));
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+        
+        .content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        
+        .app-name {
+            font-size: 42px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -1px;
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .tagline {
+            font-size: 18px;
+            font-weight: 500;
+            opacity: 0.85;
+            margin-bottom: 50px;
+            letter-spacing: 0.5px;
+        }
+        
+        .mode-selection {
+            display: flex;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .mode-button {
+            width: 90px;
+            height: 90px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            color: white;
+            font-size: 36px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+        
+        .mode-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .progress-container {
+            width: 300px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 30px;
+            display: none;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: white;
+            border-radius: 2px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <div class="app-name">LunaGram</div>
+        <div class="tagline">by Kaushik S</div>
+        
+        <div class="mode-selection">
+            <div class="mode-button" onclick="selectMode('mobile')">📱</div>
+            <div class="mode-button" onclick="selectMode('desktop')">💻</div>
+        </div>
+        
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+    
+    <script>
+        let progress = 0;
+        let selectedMode = null;
+        const progressBar = document.getElementById('progressBar');
+        const progressContainer = document.getElementById('progressContainer');
+        let updateProgress = null;
+        
+        window.selectMode = function(mode) {
+            selectedMode = mode;
+            
+            document.querySelector('.mode-selection').style.display = 'none';
+            progressContainer.style.display = 'block';
+            
+            updateProgress = setInterval(() => {
+                if (progress < 90) {
+                    progress += Math.random() * 10 + 5;
+                    if (progress > 90) progress = 90;
+                    progressBar.style.width = progress + '%';
+                }
+            }, 100);
+            
+            if (window.electronAPI && window.electronAPI.modeSelected) {
+                window.electronAPI.modeSelected(mode);
+            }
+        };
+        
+        window.completeLoading = function() {
+            if (updateProgress) {
+                clearInterval(updateProgress);
+                progress = 100;
+                progressBar.style.width = '100%';
+            }
+        };
+    </script>
+</body>
+</html>

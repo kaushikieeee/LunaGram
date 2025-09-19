@@ -1,0 +1,113 @@
+name: Build and Release LunaGram
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build app
+      run: npm run build
+      env:
+        CSC_IDENTITY_AUTO_DISCOVERY: false
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.event.inputs.version }}
+        release_name: LunaGram ${{ github.event.inputs.version }}
+        body: |
+          ## 🚀 LunaGram ${{ github.event.inputs.version }}
+          
+          ### 📥 Installation
+          
+          **Recommended**: Download the `.dmg` file below for the fastest installation experience.
+          
+          ### 📦 Downloads
+          - **Intel Macs**: `LunaGram-${{ github.event.inputs.version }}.dmg`
+          - **Apple Silicon Macs**: `LunaGram-${{ github.event.inputs.version }}-arm64.dmg`
+          - **Universal ZIP**: `LunaGram-${{ github.event.inputs.version }}-mac.zip`
+          
+          ### 🔧 Installation Instructions
+          1. Download the appropriate `.dmg` file for your Mac
+          2. Open the `.dmg` file
+          3. Drag LunaGram to your Applications folder
+          4. Launch LunaGram from Applications
+          
+          **First launch**: Right-click → Open (for security approval)
+          
+          ### ✨ Features
+          - Native Instagram experience for macOS
+          - Fast startup with automatic optimizations
+          - Universal binary (Intel + Apple Silicon)
+          - Persistent login
+          - Deep link support
+        draft: false
+        prerelease: ${{ github.event.inputs.prerelease }}
+        
+    - name: Upload Intel DMG
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/LunaGram-1.0.0.dmg
+        asset_name: LunaGram-${{ github.event.inputs.version }}.dmg
+        asset_content_type: application/octet-stream
+        
+    - name: Upload Apple Silicon DMG
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/LunaGram-1.0.0-arm64.dmg
+        asset_name: LunaGram-${{ github.event.inputs.version }}-arm64.dmg
+        asset_content_type: application/octet-stream
+        
+    - name: Upload Intel ZIP
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/LunaGram-1.0.0-mac.zip
+        asset_name: LunaGram-${{ github.event.inputs.version }}-mac.zip
+        asset_content_type: application/zip
+        
+    - name: Upload Apple Silicon ZIP
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/LunaGram-1.0.0-arm64-mac.zip
+        asset_name: LunaGram-${{ github.event.inputs.version }}-arm64-mac.zip
+        asset_content_type: application/zip
